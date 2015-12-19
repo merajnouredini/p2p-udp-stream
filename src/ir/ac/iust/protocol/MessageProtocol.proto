@@ -1,0 +1,42 @@
+syntax = "proto2";
+
+enum MessageType {
+    REGISTER = 1;
+    REGISTER_RSP = 2;
+    UNREGISTER = 3;
+    UNREGISTER_RSP = 4;
+    STREAM_REQUEST = 5;
+    STREAM_REQUEST_RSP = 6;
+    STREAM = 7;
+    STREAM_RSP = 8;
+}
+
+enum Status {
+    SUCCESS = 1;
+    FAILURE = 2;
+}
+
+message Response {
+    required MessageType type = 1;
+    required Status status = 2;
+    optional string msg = 3;
+}
+
+message RegisterClient {
+    required MessageType type = 1 [default=REGISTER];
+    required string clientName = 2;
+}
+
+message UnregisterClient {
+    required MessageType type = 1 [default=UNREGISTER];
+    required string clientName = 2;
+}
+
+message StreamRequest {
+    required MessageType type = 1 [default=STREAM_REQUEST];
+    required string streamName = 3;
+}
+
+message Stream {
+    required MessageType type = 1 [default=STREAM];
+}

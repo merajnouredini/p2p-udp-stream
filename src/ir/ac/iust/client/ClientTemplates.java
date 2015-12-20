@@ -1,7 +1,5 @@
 package ir.ac.iust.client;
 
-import ir.ac.iust.server.ServerTemplates.FileEvent;
-
 import java.io.*;
 import java.net.*;
 

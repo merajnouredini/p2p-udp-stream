@@ -35,10 +35,12 @@ public class Server {
          */
     }
 
-    public void listen(int port) throws IOException {
+    public static void listen(int port) throws IOException {
         serverSocket = new ServerSocket(port);
+        System.out.println("Waiting for clients on port " + port + " ...");
         while (true) {
             Socket socket = serverSocket.accept();
+            System.out.println("Client connected...");
             ClientHandler handler = new ClientHandler(socket);
             handlers.add(handler);
             Thread t = new Thread(handler);
@@ -80,6 +82,18 @@ public class Server {
 
     public static ArrayList<ClientUDP> getChain() {
         return (ArrayList<ClientUDP>) streamChains;
+    }
+
+    public static void emptyChain() {
+        streamChains.clear();
+    }
+
+    public static void main(String[] args) {
+        try {
+            Server.listen(4444);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 }
 

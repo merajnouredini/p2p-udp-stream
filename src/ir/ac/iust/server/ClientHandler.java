@@ -4,7 +4,9 @@ import com.google.protobuf.InvalidProtocolBufferException;
 import com.sun.istack.internal.Nullable;
 import ir.ac.iust.client.Client;
 import ir.ac.iust.protocol.MessageProtocol;
+import ir.ac.iust.protocol.PKT;
 import sun.plugin2.message.Message;
+import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -45,8 +47,8 @@ public class ClientHandler implements Runnable{
 //                    processIncomingMessage(msg);
                     bytesread = inputStream.read(buffer, 2, messageSize);
                     byte[] data = new byte[messageSize-1];
-                    int type = buffer[0];
-                    System.arraycopy(buffer, 1, data, 1, messageSize - 1);
+                    System.arraycopy(buffer, 3, data, 0, messageSize - 1);
+                    int type = buffer[2];
                     PKT pkt = new PKT(type, data);
                     processIncomingMessage(pkt);
                 }
@@ -69,10 +71,11 @@ public class ClientHandler implements Runnable{
                 handleStreamRequest(pkt);
                 break;
             case MessageProtocol.MessageType.STREAM_REQUEST_RSP_VALUE:
-
+                handleStreamRequestResponse(pkt);
                 break;
-//            case MessageProtocol.MessageType.STREAM_VALUE:
-//                break;
+            case MessageProtocol.MessageType.STREAM_RSP_VALUE:
+                handleStreamResponse(pkt);
+                break;
         }
     }
 
@@ -81,12 +84,14 @@ public class ClientHandler implements Runnable{
         this.clientName = registerClient.getClientName();
         Server.registerClient(registerClient.getClientName(), socket);
         sendResponse(MessageProtocol.MessageType.REGISTER_RSP, MessageProtocol.Status.SUCCESS, null);
+        System.out.println("Client registered with name " + this.clientName);
     }
 
     private void unregisterClient(PKT pkt) throws InvalidProtocolBufferException {
         MessageProtocol.UnregisterClient unregisterClient = MessageProtocol.UnregisterClient.parseFrom(pkt.data);
         Server.unregisterClient(unregisterClient.getClientName());
         sendResponse(MessageProtocol.MessageType.UNREGISTER_RSP, MessageProtocol.Status.SUCCESS, null);
+        System.out.println("client " + unregisterClient.getClientName() + " unregistered.");
     }
 
     private void handleStreamRequest(PKT pkt) throws InvalidProtocolBufferException {
@@ -122,8 +127,24 @@ public class ClientHandler implements Runnable{
         }
         Server.incrementNumberOfStreamRequestAnswers();
         if (Server.isChainReady()){
+            ClientHandler last = Server.streamRequester;
+            for(ClientUDP udp : Server.getChain()){
+                last.sendResponse(MessageProtocol.MessageType.STREAM_RSP,
+                        MessageProtocol.Status.SUCCESS,udp.ip + ":" + udp.port);
+                last = udp.handler;
+            }
             Server.streamRequester.sendResponse(MessageProtocol.MessageType.STREAM_RSP, MessageProtocol.Status.SUCCESS,
                     "start");
+        }
+    }
+
+    private void handleStreamResponse(PKT pkt) throws InvalidProtocolBufferException {
+        MessageProtocol.Response response = MessageProtocol.Response.parseFrom(pkt.data);
+        if(response.getStatus() == MessageProtocol.Status.SUCCESS) {
+            Server.streamRequester = null;
+            Server.emptyChain();
+        } else {
+            throw new NotImplementedException();
         }
     }
 
@@ -131,7 +152,9 @@ public class ClientHandler implements Runnable{
                               MessageProtocol.Status status,
                               @Nullable String message) {
         MessageProtocol.Response.Builder builder = MessageProtocol.Response.newBuilder();
-        builder.setMsg(message);
+        if(message != null) {
+            builder.setMsg(message);
+        }
         builder.setStatus(status);
         builder.setType(type);
         MessageProtocol.Response response = builder.build();
@@ -162,13 +185,4 @@ public class ClientHandler implements Runnable{
         }).start();
     }
 
-    private class PKT{
-        public int type;
-        public byte[] data;
-
-        public PKT(int type, byte[] data) {
-            this.type = type;
-            this.data = data;
-        }
-    }
 }

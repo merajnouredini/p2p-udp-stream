@@ -8,11 +8,13 @@ import ir.ac.iust.protocol.PKT;
 import sun.plugin2.message.Message;
 import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
+import javax.management.openmbean.KeyAlreadyExistsException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.Socket;
 import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Created by meraj on 12/19/15.
@@ -31,7 +33,7 @@ public class ClientHandler implements Runnable{
 
     @Override
     public void run() {
-        System.out.println(socket.getLocalPort() + " connected");
+        System.out.println(socket.getPort() + " connected");
         byte[] buffer = new byte[4096];
         try {
 //            DataInputStream dataInputStream = new DataInputStream(inputStream);
@@ -53,7 +55,8 @@ public class ClientHandler implements Runnable{
                     processIncomingMessage(pkt);
                 }
             }
-            System.out.println(socket.getLocalPort() + " closed");
+            Server.unregisterClient(clientName);
+            System.out.println(socket.getPort() + " closed");
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -82,9 +85,17 @@ public class ClientHandler implements Runnable{
     private void registerClient(PKT pkt) throws InvalidProtocolBufferException {
         MessageProtocol.RegisterClient registerClient = MessageProtocol.RegisterClient.parseFrom(pkt.data);
         this.clientName = registerClient.getClientName();
-        Server.registerClient(registerClient.getClientName(), socket);
-        sendResponse(MessageProtocol.MessageType.REGISTER_RSP, MessageProtocol.Status.SUCCESS, null);
-        System.out.println("Client registered with name " + this.clientName);
+        try {
+            Server.registerClient(registerClient.getClientName(), socket);
+            Server.addHandler(this);
+            sendResponse(MessageProtocol.MessageType.REGISTER_RSP, MessageProtocol.Status.SUCCESS, null);
+            System.out.println("Client registered with name " + this.clientName);
+        } catch (KeyAlreadyExistsException e){
+            System.out.println("User already exist error...");
+            sendResponse(MessageProtocol.MessageType.REGISTER_RSP,
+                    MessageProtocol.Status.SUCCESS,
+                    "User already exist");
+        }
     }
 
     private void unregisterClient(PKT pkt) throws InvalidProtocolBufferException {
@@ -97,6 +108,8 @@ public class ClientHandler implements Runnable{
     private void handleStreamRequest(PKT pkt) throws InvalidProtocolBufferException {
         if(Server.streamRequester == null) {
             MessageProtocol.StreamRequest streamRequest = MessageProtocol.StreamRequest.parseFrom(pkt.data);
+            System.out.println("Stream request from " + clientName + " received," +
+                    " with name "+ streamRequest.getStreamName());
             byte[] p = new byte[streamRequest.getSerializedSize() + 3];
             p[0] = (byte) ((streamRequest.getSerializedSize() + 1) & 0xFF);
             p[1] = (byte) (((streamRequest.getSerializedSize() + 1) >> 8) & 0xFF);
@@ -106,11 +119,16 @@ public class ClientHandler implements Runnable{
                 p[i] = temp[j];
             }
 
-            ClientHandler[] handlers = Server.getClientHandlers();
+            List<ClientHandler> handlers = Server.getClientHandlers();
             for (ClientHandler handler : handlers) {
-                handler.sendMessage(p);
+                if(handler != this) {
+                    handler.sendMessage(p);
+                    System.out.println("Stream Request sent to " + handler.clientName);
+                }
             }
+            Server.streamRequester = this;
         } else {
+            System.out.println("pending chain");
             sendResponse(MessageProtocol.MessageType.STREAM_REQUEST_RSP,
                     MessageProtocol.Status.FAILURE, "pending chain error");
         }
@@ -118,19 +136,22 @@ public class ClientHandler implements Runnable{
 
     private void handleStreamRequestResponse(PKT pkt) throws InvalidProtocolBufferException {
         MessageProtocol.Response response = MessageProtocol.Response.parseFrom(pkt.data);
+
         if(response.getStatus() == MessageProtocol.Status.SUCCESS) {
             String[] message = response.getMsg().split(":");
             String ip = message[0];
             String port = message[1];
             ClientUDP udp = new ClientUDP(ip, port, this);
             Server.addToChain(udp);
+            System.out.println(clientName + " added to chain...");
         }
         Server.incrementNumberOfStreamRequestAnswers();
         if (Server.isChainReady()){
+            System.out.println("Everyone responded");
             ClientHandler last = Server.streamRequester;
             for(ClientUDP udp : Server.getChain()){
                 last.sendResponse(MessageProtocol.MessageType.STREAM_RSP,
-                        MessageProtocol.Status.SUCCESS,udp.ip + ":" + udp.port);
+                        MessageProtocol.Status.SUCCESS, udp.ip + ":" + udp.port);
                 last = udp.handler;
             }
             Server.streamRequester.sendResponse(MessageProtocol.MessageType.STREAM_RSP, MessageProtocol.Status.SUCCESS,
@@ -143,6 +164,7 @@ public class ClientHandler implements Runnable{
         if(response.getStatus() == MessageProtocol.Status.SUCCESS) {
             Server.streamRequester = null;
             Server.emptyChain();
+            Server.resetNumberOfStreamRequestAnswers();
         } else {
             throw new NotImplementedException();
         }

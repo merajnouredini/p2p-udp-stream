@@ -1,5 +1,6 @@
 package ir.ac.iust.client;
 
+import com.google.protobuf.InvalidProtocolBufferException;
 import com.sun.org.apache.xpath.internal.SourceTree;
 import ir.ac.iust.protocol.MessageProtocol;
 import ir.ac.iust.protocol.PKT;
@@ -50,10 +51,12 @@ public class ServerCommunicator implements Runnable {
             System.out.println(socket.getLocalPort() + " closed");
         } catch (IOException e) {
             System.out.println("socket closed");
+        } catch (InterruptedException e) {
+            e.printStackTrace();
         }
     }
 
-    private void processIncomingMessage(PKT pkt){
+    private void processIncomingMessage(PKT pkt) throws InterruptedException {
         switch (pkt.type){
             case MessageProtocol.MessageType.REGISTER_RSP_VALUE:
                 System.out.println("registered successfully");
@@ -62,25 +65,16 @@ public class ServerCommunicator implements Runnable {
                 System.out.println("Unregistered");
                 break;
             case MessageProtocol.MessageType.STREAM_REQUEST_VALUE:
-                System.out.println("do you want the file? (y,n) : ");
-                while (true) {
-                    Scanner input = new Scanner(System.in);
-                    String i = input.next();
-                    if (i.equals("y")) {
-                        client.sendStreamRequestResponse(true);
-                        return;
-                    } else if (i.equals("n")) {
-                        client.sendStreamRequestResponse(false);
-                        return;
-                    } else {
-                        System.out.println("bad answer, answer with y or n :");
-                    }
-                }
+                System.out.println("Stream Request received");
+                client.isStreamRequestAvailable = true;
             case MessageProtocol.MessageType.STREAM_REQUEST_RSP_VALUE:
-
                 break;
             case MessageProtocol.MessageType.STREAM_RSP_VALUE:
-
+                try {
+                    client.handleStreamResponse(pkt);
+                } catch (InvalidProtocolBufferException e) {
+                    System.out.println("invalid message received");
+                }
                 break;
         }
     }

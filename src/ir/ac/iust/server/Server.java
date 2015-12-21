@@ -3,6 +3,8 @@ package ir.ac.iust.server;
 import ir.ac.iust.client.Client;
 import ir.ac.iust.protocol.MessageProtocol;
 
+import javax.management.openmbean.KeyAlreadyExistsException;
+import javax.swing.event.CaretListener;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -23,18 +25,6 @@ public class Server {
     private static int numOfStreamRequestAnswers = 0;
 
 
-    public void startSending() {
-        /*
-        send data stream request and name to all clients
-         */
-    }
-
-    public void makeConnectionChain() {
-        /*
-        manage sending order between clients using random distribution
-         */
-    }
-
     public static void listen(int port) throws IOException {
         serverSocket = new ServerSocket(port);
         System.out.println("Waiting for clients on port " + port + " ...");
@@ -42,14 +32,20 @@ public class Server {
             Socket socket = serverSocket.accept();
             System.out.println("Client connected...");
             ClientHandler handler = new ClientHandler(socket);
-            handlers.add(handler);
             Thread t = new Thread(handler);
             t.start();
         }
     }
 
-    public static synchronized void registerClient(String name, Socket socket) {
-        clients.put(name, socket);
+    public static synchronized void addHandler(ClientHandler handler){
+        handlers.add(handler);
+    }
+    public static synchronized void registerClient(String name, Socket socket) throws KeyAlreadyExistsException {
+        if(!clients.containsKey(name)) {
+            clients.put(name, socket);
+        } else {
+            throw new KeyAlreadyExistsException();
+        }
     }
 
     public static synchronized void unregisterClient(String clientName) {
@@ -64,20 +60,24 @@ public class Server {
         numOfStreamRequestAnswers ++;
     }
 
+    public static synchronized void resetNumberOfStreamRequestAnswers(){
+        numOfStreamRequestAnswers = 0;
+    }
+
     public static synchronized void setCurrentRequester(ClientHandler handler){
         streamRequester = handler;
     }
 
     public static boolean isChainReady(){
-        return numOfStreamRequestAnswers == handlers.size();
+        return numOfStreamRequestAnswers == handlers.size()-1;
     }
 
     public static Socket[] getClientSockets() {
         return (Socket[]) clients.values().toArray();
     }
 
-    public static ClientHandler[] getClientHandlers() {
-        return (ClientHandler[]) handlers.toArray();
+    public static List<ClientHandler> getClientHandlers() {
+        return handlers;
     }
 
     public static ArrayList<ClientUDP> getChain() {

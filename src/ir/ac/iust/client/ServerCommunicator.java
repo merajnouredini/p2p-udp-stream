@@ -14,13 +14,15 @@ import java.util.Scanner;
  * Created by meraj on 12/20/15.
  */
 public class ServerCommunicator implements Runnable {
+    private Client client;
     private Socket socket = null;
     private FileEvent fileEvent = null;
     private InputStream inputStream;
     private OutputStream outputStream;
 
-    public ServerCommunicator(Socket socket) throws IOException {
+    public ServerCommunicator(Client client,Socket socket) throws IOException {
         this.socket = socket;
+        this.client = client;
         inputStream = socket.getInputStream();
         outputStream = socket.getOutputStream();
     }
@@ -60,10 +62,20 @@ public class ServerCommunicator implements Runnable {
                 System.out.println("Unregistered");
                 break;
             case MessageProtocol.MessageType.STREAM_REQUEST_VALUE:
-                System.out.println("do you want the file?");
-//                Scanner input = new Scanner(System.in);
-//                String i = input.next();
-                break;
+                System.out.println("do you want the file? (y,n) : ");
+                while (true) {
+                    Scanner input = new Scanner(System.in);
+                    String i = input.next();
+                    if (i.equals("y")) {
+                        client.sendStreamRequestResponse(true);
+                        return;
+                    } else if (i.equals("n")) {
+                        client.sendStreamRequestResponse(false);
+                        return;
+                    } else {
+                        System.out.println("bad answer, answer with y or n :");
+                    }
+                }
             case MessageProtocol.MessageType.STREAM_REQUEST_RSP_VALUE:
 
                 break;

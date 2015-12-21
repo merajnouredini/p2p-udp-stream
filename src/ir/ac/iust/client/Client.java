@@ -26,13 +26,13 @@ public class Client {
 
     private void connectToServer(String ip, int port) throws IOException {
         socket = new Socket(ip, port);
-        Thread thread = new Thread(new ServerCommunicator(socket));
+        Thread thread = new Thread(new ServerCommunicator(this,socket));
         thread.start();
     }
 
-    public void createAndListenSocket() {
+    public void createAndListenSocket(int listenPort) {
         try {
-            udpSocket = new DatagramSocket(9876);
+            udpSocket = new DatagramSocket(listenPort);
             byte[] incomingData = new byte[1024 * 1000 * 50];
             while (true) {
                 DatagramPacket incomingPacket = new DatagramPacket(incomingData, incomingData.length);
@@ -43,26 +43,24 @@ public class Client {
                 fileEvent = (FileEvent) is.readObject();
                 if (fileEvent.getStatus().equalsIgnoreCase("Error")) {
                     System.out.println("Some issue happened while packing the data @ client side");
-                    System.exit(0);
+//                    System.exit(0);
                 }
                 createAndWriteFile();   // writing the file to hard disk
-                InetAddress IPAddress = incomingPacket.getAddress();
-                int port = incomingPacket.getPort();
-                String reply = "Thank you for the message";
-                byte[] replyBytea = reply.getBytes();
-                DatagramPacket replyPacket =
-                        new DatagramPacket(replyBytea, replyBytea.length, IPAddress, port);
-                udpSocket.send(replyPacket);
-                Thread.sleep(3000);
-                System.exit(0);
+//                InetAddress IPAddress = incomingPacket.getAddress();
+//                int port = incomingPacket.getPort();
+//                String reply = "Thank you for the message";
+//                byte[] replyBytea = reply.getBytes();
+//                DatagramPacket replyPacket =
+//                        new DatagramPacket(replyBytea, replyBytea.length, IPAddress, port);
+//                udpSocket.send(replyPacket);
+//                Thread.sleep(3000);
+//                System.exit(0);
             }
         } catch (SocketException e) {
             e.printStackTrace();
         } catch (IOException e) {
             e.printStackTrace();
         } catch (ClassNotFoundException e) {
-            e.printStackTrace();
-        } catch (InterruptedException e) {
             e.printStackTrace();
         }
     }
@@ -102,7 +100,7 @@ public class Client {
         prepareAndSendMessage(registerClient, builder.getType());
     }
 
-    private void unregisterInServer(){
+    private void unregisterInServer() {
         MessageProtocol.UnregisterClient.Builder builder = MessageProtocol.UnregisterClient.newBuilder();
         builder.setType(MessageProtocol.MessageType.UNREGISTER);
         builder.setClientName(clientName);
@@ -110,23 +108,54 @@ public class Client {
         prepareAndSendMessage(unregisterClient, builder.getType());
     }
 
-    private void sendStreamRequest(){
-
+    private void sendStreamRequest(String streamName) {
+        MessageProtocol.StreamRequest.Builder builder = MessageProtocol.StreamRequest.newBuilder();
+        builder.setType(MessageProtocol.MessageType.STREAM_REQUEST);
+        builder.setStreamName(streamName);
+        MessageProtocol.StreamRequest streamRequest = builder.build();
+        prepareAndSendMessage(streamRequest, builder.getType());
     }
 
-    private void prepareAndSendMessage(Message msg, MessageProtocol.MessageType type){
+    public void sendStreamRequestResponse(boolean isIntrested) {
+        MessageProtocol.Response.Builder builder = MessageProtocol.Response.newBuilder();
+        builder.setType(MessageProtocol.MessageType.STREAM_REQUEST_RSP);
+        if(isIntrested) {
+            System.out.println("Enter receive port number : ");
+            int i = -1;
+            while (true) {
+                String s = (new Scanner(System.in)).next();
+                try {
+                    i = Integer.parseInt(s);
+                    if( i < 1024 || i > 6535){
+                        throw new NumberFormatException();
+                    }
+                }catch (NumberFormatException e){
+                    System.out.println("Enter valid port Number!!");
+                }
+                break;
+            }
+            builder.setStatus(MessageProtocol.Status.SUCCESS);
+            builder.setMsg(socket.getInetAddress().getHostName()+":"+i);
+        } else {
+
+        }
+        MessageProtocol.Response response = builder.build();
+        prepareAndSendMessage(response, builder.getType());
+    }
+
+    private void prepareAndSendMessage(Message msg, MessageProtocol.MessageType type) {
         byte[] pkt = new byte[msg.getSerializedSize() + 3];
-        pkt[0] = (byte) ((msg.getSerializedSize() + 1) & 0xFF) ;
-        pkt[1] = (byte) (((msg.getSerializedSize() + 1) >> 8) & 0xFF) ;
+        pkt[0] = (byte) ((msg.getSerializedSize() + 1) & 0xFF);
+        pkt[1] = (byte) (((msg.getSerializedSize() + 1) >> 8) & 0xFF);
         pkt[2] = (byte) type.getNumber();
         byte[] temp = msg.toByteArray();
-        for(int i=3,  j=0; i< msg.getSerializedSize()+3; i++, j++){
+        for (int i = 3, j = 0; i < msg.getSerializedSize() + 3; i++, j++) {
             pkt[i] = temp[j];
         }
         sendMessage(pkt);
     }
 
-    public void sendMessage(final byte[] pkt){
+    public void sendMessage(final byte[] pkt) {
         new Thread(new Runnable() {
             public void run() {
                 try {
@@ -178,7 +207,8 @@ public class Client {
                     client.unregisterInServer();
                     break;
                 case 3:
-//                sendStreamRequest();
+                    s = input.next();
+                    client.sendStreamRequest(s);
                     break;
             }
         }

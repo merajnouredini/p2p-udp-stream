@@ -77,7 +77,7 @@ public class ServerCommunicator implements Runnable {
                 }
                 break;
             case MessageProtocol.MessageType.STREAM_REQUEST_VALUE:
-                System.out.println("Stream Request received");
+                System.out.println("Stream Request received, you can choose option 4 to answer it.");
                 MessageProtocol.StreamRequest request = MessageProtocol.StreamRequest.parseFrom(pkt.data);
                 StreamRequest streamRequest = new StreamRequest(request.getStreamName());
                 client.setStreamRequest(streamRequest);

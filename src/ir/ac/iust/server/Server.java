@@ -71,16 +71,8 @@ public class Server {
         numOfStreamRequestAnswers = 0;
     }
 
-    public static synchronized void setCurrentRequester(ClientHandler handler){
-        streamRequester = handler;
-    }
-
     public static boolean isChainReady(){
         return numOfStreamRequestAnswers == handlers.size()-1;
-    }
-
-    public static Socket[] getClientSockets() {
-        return (Socket[]) clients.values().toArray();
     }
 
     public static List<ClientHandler> getClientHandlers() {

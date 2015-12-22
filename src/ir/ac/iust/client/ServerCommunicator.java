@@ -50,6 +50,7 @@ public class ServerCommunicator implements Runnable {
             }
             System.out.println(socket.getLocalPort() + " closed");
         } catch (IOException e) {
+            e.printStackTrace();
             System.out.println("socket closed");
         } catch (InterruptedException e) {
             e.printStackTrace();
@@ -80,6 +81,7 @@ public class ServerCommunicator implements Runnable {
                 MessageProtocol.StreamRequest request = MessageProtocol.StreamRequest.parseFrom(pkt.data);
                 StreamRequest streamRequest = new StreamRequest(request.getStreamName());
                 client.setStreamRequest(streamRequest);
+                break;
             case MessageProtocol.MessageType.STREAM_REQUEST_RSP_VALUE:
                 response = MessageProtocol.Response.parseFrom(pkt.data);
                 if(response.getStatus() != MessageProtocol.Status.SUCCESS) {

@@ -11,6 +11,8 @@ import sun.plugin.dom.exception.InvalidStateException;
 
 import java.io.*;
 import java.net.*;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Scanner;
 import java.util.concurrent.Semaphore;
 
@@ -19,21 +21,22 @@ import java.util.concurrent.Semaphore;
  */
 public class Client {
 
-    private DatagramSocket udpReceiverSocket = null;
-    private DatagramSocket udpSenderSocket = null;
+    private StreamRequest currentRequest;
     private Socket socket = null;
-    private FileEvent fileEvent = null;
     private String clientName;
     public boolean isStreamRequestAvailable = false;
     private String hostName = "localHost";
     private String nextHost;
     private int nextPort;
     private String sourceFilePath = "/home/meraj/movie.mkv";
-    private String destinationPath = "./";
     private final int CHUNK_SIZE = 1024;
 
     public Client() {
 
+    }
+
+    public void setStreamRequest(StreamRequest request) {
+        currentRequest = request;
     }
 
     private void connectToServer(String ip, int port) throws IOException {
@@ -43,7 +46,7 @@ public class Client {
     }
 
     public void createAndListenSocket(final int listenPort) throws SocketException {
-        udpReceiverSocket = new DatagramSocket(listenPort);
+        currentRequest.udpReceiverSocket = new DatagramSocket(listenPort);
         Thread thread = new Thread(new Runnable() {
             @Override
             public void run() {
@@ -54,13 +57,13 @@ public class Client {
                     while (true) {
                         time = System.nanoTime();
                         DatagramPacket incomingPacket = new DatagramPacket(incomingData, incomingData.length);
-                        udpReceiverSocket.receive(incomingPacket);
+                        currentRequest.udpReceiverSocket.receive(incomingPacket);
                         time = System.nanoTime() - time;
                         if (i % 10 == 0) {
                             System.out.println("download rate : " + incomingPacket.getLength() / (double) time + " Gbps");
                         }
                         byte[] data = incomingPacket.getData();
-                        if (udpSenderSocket != null) {
+                        if (currentRequest.udpSenderSocket != null) {
                             stream(data);
                         }
                         i++;
@@ -87,7 +90,7 @@ public class Client {
                 time = System.nanoTime();
                 DatagramPacket sendPacket =
                         new DatagramPacket(data, bytesRead, address, nextPort);
-                udpSenderSocket.send(sendPacket);
+                currentRequest.udpSenderSocket.send(sendPacket);
                 time = System.nanoTime() - time;
                 if (i % 10 == 0) {
                     System.out.println("upload rate : " + sendPacket.getLength() / (float) time + "Gbps");
@@ -108,7 +111,7 @@ public class Client {
             time = System.nanoTime();
             DatagramPacket sendPacket =
                     new DatagramPacket(data, data.length, address, nextPort);
-            udpSenderSocket.send(sendPacket);
+            currentRequest.udpSenderSocket.send(sendPacket);
             time = System.nanoTime() - time;
             System.out.println("upload rate : " + sendPacket.getLength() / (float) time + " Gbps");
 
@@ -139,6 +142,7 @@ public class Client {
         builder.setStreamName(streamName);
         MessageProtocol.StreamRequest streamRequest = builder.build();
         prepareAndSendMessage(streamRequest, builder.getType());
+        currentRequest = new StreamRequest(streamName);
     }
 
     public void sendStreamRequestResponse(boolean isIntrested) {
@@ -165,7 +169,7 @@ public class Client {
                 System.out.println("Cannot listen to this port");
             }
             builder.setStatus(MessageProtocol.Status.SUCCESS);
-            builder.setMsg(udpReceiverSocket.getLocalAddress().getHostName() + ":" + i);
+            builder.setMsg(currentRequest.udpReceiverSocket.getLocalAddress().getHostName() + ":" + i);
         } else {
             builder.setStatus(MessageProtocol.Status.FAILURE);
         }
@@ -213,6 +217,31 @@ public class Client {
         socket.close();
     }
 
+    public void handleStreamResponse(PKT pkt) throws InvalidProtocolBufferException {
+        MessageProtocol.Response response = MessageProtocol.Response.parseFrom(pkt.data);
+        if (response.getStatus() == MessageProtocol.Status.SUCCESS) {
+            if ("start".equals(response.getMsg())) {
+                if (nextHost == null || nextHost.equals("")) {
+                    throw new InvalidStateException("no next host received");
+                } else {
+                    stream();
+                }
+            } else {
+                String[] msg = response.getMsg().split(":");
+                nextHost = msg[0];
+                try {
+                    nextPort = Integer.parseInt(msg[1]);
+                    currentRequest.udpSenderSocket = new DatagramSocket();
+                    System.out.println("I'll send to " + nextHost + ":" + nextPort);
+                } catch (NumberFormatException e) {
+                    System.out.println("bad response from server");
+                } catch (SocketException e) {
+                    System.out.println("unable to connect to host");
+                }
+            }
+        }
+    }
+
     public static void main(String[] args) throws InterruptedException {
         Client client = new Client();
         try {
@@ -256,8 +285,8 @@ public class Client {
                     client.sendStreamRequest(s);
                     break;
                 case 4:
-                    if (client.isStreamRequestAvailable) {
-                        System.out.println("do you want the file? (y,n) : ");
+                    if (client.currentRequest != null) {
+                        System.out.println("do you want the" + client.currentRequest.name + " stream? (y,n) : ");
                         while (true) {
                             String i = input.next();
                             if (i.equals("y")) {
@@ -281,31 +310,6 @@ public class Client {
             client.closeConnection();
         } catch (IOException e) {
             e.printStackTrace();
-        }
-    }
-
-    public void handleStreamResponse(PKT pkt) throws InvalidProtocolBufferException {
-        MessageProtocol.Response response = MessageProtocol.Response.parseFrom(pkt.data);
-        if (response.getStatus() == MessageProtocol.Status.SUCCESS) {
-            if ("start".equals(response.getMsg())) {
-                if (nextHost == null || nextHost.equals("")) {
-                    throw new InvalidStateException("no next host received");
-                } else {
-                    stream();
-                }
-            } else {
-                String[] msg = response.getMsg().split(":");
-                nextHost = msg[0];
-                try {
-                    nextPort = Integer.parseInt(msg[1]);
-                    udpSenderSocket = new DatagramSocket();
-                    System.out.println("I'll send to " + nextHost + ":" + nextPort);
-                } catch (NumberFormatException e) {
-                    System.out.println("bad response from server");
-                } catch (SocketException e) {
-                    System.out.println("unable to connect to host");
-                }
-            }
         }
     }
 }

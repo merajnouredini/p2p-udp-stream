@@ -15,6 +15,7 @@ import java.io.OutputStream;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.NoSuchElementException;
 
 /**
  * Created by meraj on 12/19/15.
@@ -100,37 +101,47 @@ public class ClientHandler implements Runnable{
 
     private void unregisterClient(PKT pkt) throws InvalidProtocolBufferException {
         MessageProtocol.UnregisterClient unregisterClient = MessageProtocol.UnregisterClient.parseFrom(pkt.data);
-        Server.unregisterClient(unregisterClient.getClientName());
-        sendResponse(MessageProtocol.MessageType.UNREGISTER_RSP, MessageProtocol.Status.SUCCESS, null);
-        System.out.println("client " + unregisterClient.getClientName() + " unregistered.");
+        try {
+            Server.unregisterClient(unregisterClient.getClientName());
+            sendResponse(MessageProtocol.MessageType.UNREGISTER_RSP, MessageProtocol.Status.SUCCESS, null);
+            System.out.println("client " + unregisterClient.getClientName() + " unregistered.");
+        } catch (NoSuchElementException e){
+            sendResponse(MessageProtocol.MessageType.UNREGISTER_RSP, MessageProtocol.Status.FAILURE,
+                    "not registered yet");
+        }
     }
 
     private void handleStreamRequest(PKT pkt) throws InvalidProtocolBufferException {
-        if(Server.streamRequester == null) {
-            MessageProtocol.StreamRequest streamRequest = MessageProtocol.StreamRequest.parseFrom(pkt.data);
-            System.out.println("Stream request from " + clientName + " received," +
-                    " with name "+ streamRequest.getStreamName());
-            byte[] p = new byte[streamRequest.getSerializedSize() + 3];
-            p[0] = (byte) ((streamRequest.getSerializedSize() + 1) & 0xFF);
-            p[1] = (byte) (((streamRequest.getSerializedSize() + 1) >> 8) & 0xFF);
-            p[2] = (byte) streamRequest.getType().getNumber();
-            byte[] temp = streamRequest.toByteArray();
-            for (int i = 3, j = 0; i < streamRequest.getSerializedSize() + 3; i++, j++) {
-                p[i] = temp[j];
-            }
-
-            List<ClientHandler> handlers = Server.getClientHandlers();
-            for (ClientHandler handler : handlers) {
-                if(handler != this) {
-                    handler.sendMessage(p);
-                    System.out.println("Stream Request sent to " + handler.clientName);
+        if(clientName != null && !clientName.equals("")) {
+            if (Server.streamRequester == null) {
+                MessageProtocol.StreamRequest streamRequest = MessageProtocol.StreamRequest.parseFrom(pkt.data);
+                System.out.println("Stream request from " + clientName + " received," +
+                        " with name " + streamRequest.getStreamName());
+                byte[] p = new byte[streamRequest.getSerializedSize() + 3];
+                p[0] = (byte) ((streamRequest.getSerializedSize() + 1) & 0xFF);
+                p[1] = (byte) (((streamRequest.getSerializedSize() + 1) >> 8) & 0xFF);
+                p[2] = (byte) streamRequest.getType().getNumber();
+                byte[] temp = streamRequest.toByteArray();
+                for (int i = 3, j = 0; i < streamRequest.getSerializedSize() + 3; i++, j++) {
+                    p[i] = temp[j];
                 }
+
+                List<ClientHandler> handlers = Server.getClientHandlers();
+                for (ClientHandler handler : handlers) {
+                    if (handler != this) {
+                        handler.sendMessage(p);
+                        System.out.println("Stream Request sent to " + handler.clientName);
+                    }
+                }
+                Server.streamRequester = this;
+            } else {
+                System.out.println("pending chain");
+                sendResponse(MessageProtocol.MessageType.STREAM_REQUEST_RSP,
+                        MessageProtocol.Status.FAILURE, "pending chain error");
             }
-            Server.streamRequester = this;
         } else {
-            System.out.println("pending chain");
-            sendResponse(MessageProtocol.MessageType.STREAM_REQUEST_RSP,
-                    MessageProtocol.Status.FAILURE, "pending chain error");
+            sendResponse(MessageProtocol.MessageType.STREAM_REQUEST_RSP, MessageProtocol.Status.FAILURE,
+                    "not registered yet");
         }
     }
 
@@ -205,6 +216,10 @@ public class ClientHandler implements Runnable{
                 }
             }
         }).start();
+    }
+
+    public String getClientName(){
+        return clientName;
     }
 
 }

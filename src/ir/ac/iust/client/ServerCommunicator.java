@@ -56,18 +56,35 @@ public class ServerCommunicator implements Runnable {
         }
     }
 
-    private void processIncomingMessage(PKT pkt) throws InterruptedException {
+    private void processIncomingMessage(PKT pkt) throws InterruptedException, InvalidProtocolBufferException {
+        MessageProtocol.Response response;
         switch (pkt.type){
             case MessageProtocol.MessageType.REGISTER_RSP_VALUE:
-                System.out.println("registered successfully");
+                 response = MessageProtocol.Response.parseFrom(pkt.data);
+                if(response.getStatus() == MessageProtocol.Status.SUCCESS) {
+                    System.out.println("registered successfully");
+                } else {
+                    System.out.println(response.getMsg());
+                }
                 break;
             case MessageProtocol.MessageType.UNREGISTER_RSP_VALUE:
-                System.out.println("Unregistered");
+                response = MessageProtocol.Response.parseFrom(pkt.data);
+                if(response.getStatus() == MessageProtocol.Status.SUCCESS) {
+                    System.out.println("Unregistered");
+                } else {
+                    System.out.println(response.getMsg());
+                }
                 break;
             case MessageProtocol.MessageType.STREAM_REQUEST_VALUE:
                 System.out.println("Stream Request received");
-                client.isStreamRequestAvailable = true;
+                MessageProtocol.StreamRequest request = MessageProtocol.StreamRequest.parseFrom(pkt.data);
+                StreamRequest streamRequest = new StreamRequest(request.getStreamName());
+                client.setStreamRequest(streamRequest);
             case MessageProtocol.MessageType.STREAM_REQUEST_RSP_VALUE:
+                response = MessageProtocol.Response.parseFrom(pkt.data);
+                if(response.getStatus() != MessageProtocol.Status.SUCCESS) {
+                    System.out.println(response.getMsg());
+                }
                 break;
             case MessageProtocol.MessageType.STREAM_RSP_VALUE:
                 try {

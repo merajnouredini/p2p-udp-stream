@@ -32,12 +32,15 @@ public class ClientHandler implements Runnable{
         outputStream = socket.getOutputStream();
     }
 
+    /**
+     * waits for incoming messages form clients,
+     * decodes packet frames, and processes incoming messages
+     */
     @Override
     public void run() {
         System.out.println(socket.getPort() + " connected");
         byte[] buffer = new byte[4096];
         try {
-//            DataInputStream dataInputStream = new DataInputStream(inputStream);
             int bytesread = 0;
             while (bytesread != -1) {
                 // read packet header to obtain message size
@@ -46,8 +49,6 @@ public class ClientHandler implements Runnable{
                     final int highByte = buffer[1] & 0xFF;
                     final int lowByte = buffer[0] & 0xFF;
                     final int messageSize = (lowByte) + (highByte << 8);
-//                    String msg = new String(buffer,0,bytesread);
-//                    processIncomingMessage(msg);
                     bytesread = inputStream.read(buffer, 2, messageSize);
                     byte[] data = new byte[messageSize-1];
                     System.arraycopy(buffer, 3, data, 0, messageSize - 1);
@@ -59,10 +60,15 @@ public class ClientHandler implements Runnable{
             Server.unregisterClient(clientName);
             System.out.println(socket.getPort() + " closed");
         } catch (IOException e) {
-            e.printStackTrace();
+            System.out.println("error in unregister");
         }
     }
 
+    /**
+     * processes incoming message and choose proper method base on message type
+     * @param pkt
+     * @throws InvalidProtocolBufferException
+     */
     private void processIncomingMessage(PKT pkt) throws InvalidProtocolBufferException {
         switch (pkt.type){
             case MessageProtocol.MessageType.REGISTER_VALUE:
@@ -83,6 +89,11 @@ public class ClientHandler implements Runnable{
         }
     }
 
+    /**
+     * registers a connected client in server, sends register response to client
+     * @param pkt
+     * @throws InvalidProtocolBufferException
+     */
     private void registerClient(PKT pkt) throws InvalidProtocolBufferException {
         MessageProtocol.RegisterClient registerClient = MessageProtocol.RegisterClient.parseFrom(pkt.data);
         this.clientName = registerClient.getClientName();
@@ -99,6 +110,11 @@ public class ClientHandler implements Runnable{
         }
     }
 
+    /**
+     * unregisters client from server, sends unregister response to client
+     * @param pkt
+     * @throws InvalidProtocolBufferException
+     */
     private void unregisterClient(PKT pkt) throws InvalidProtocolBufferException {
         MessageProtocol.UnregisterClient unregisterClient = MessageProtocol.UnregisterClient.parseFrom(pkt.data);
         try {
@@ -111,6 +127,11 @@ public class ClientHandler implements Runnable{
         }
     }
 
+    /**
+     * sends received stream request to other clients
+     * @param pkt
+     * @throws InvalidProtocolBufferException
+     */
     private void handleStreamRequest(PKT pkt) throws InvalidProtocolBufferException {
         if(clientName != null && !clientName.equals("")) {
             if (Server.streamRequester == null) {
@@ -145,6 +166,11 @@ public class ClientHandler implements Runnable{
         }
     }
 
+    /**
+     * adds interested clients to chain, and if chain is ready, sends start message to stream requester
+     * @param pkt
+     * @throws InvalidProtocolBufferException
+     */
     private void handleStreamRequestResponse(PKT pkt) throws InvalidProtocolBufferException {
         MessageProtocol.Response response = MessageProtocol.Response.parseFrom(pkt.data);
 
@@ -170,6 +196,11 @@ public class ClientHandler implements Runnable{
         }
     }
 
+    /**
+     * if stream is complete, reset the chain settings
+     * @param pkt
+     * @throws InvalidProtocolBufferException
+     */
     private void handleStreamResponse(PKT pkt) throws InvalidProtocolBufferException {
         MessageProtocol.Response response = MessageProtocol.Response.parseFrom(pkt.data);
         if(response.getStatus() == MessageProtocol.Status.SUCCESS) {
@@ -181,6 +212,12 @@ public class ClientHandler implements Runnable{
         }
     }
 
+    /**
+     * sends responses to client
+     * @param type
+     * @param status
+     * @param message
+     */
     private void sendResponse(MessageProtocol.MessageType type,
                               MessageProtocol.Status status,
                               @Nullable String message) {
@@ -202,6 +239,10 @@ public class ClientHandler implements Runnable{
         sendMessage(pkt);
     }
 
+    /**
+     * sends packet to client
+     * @param pkt
+     */
     public void sendMessage(final byte[] pkt){
         new Thread(new Runnable() {
             public void run() {

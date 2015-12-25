@@ -1,6 +1,8 @@
 package ir.ac.iust.protocol;
 
 /**
+ * Packet Model Class
+ *
  * Created by meraj on 12/20/15.
  */
 public class PKT{

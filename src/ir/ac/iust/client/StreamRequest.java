@@ -3,6 +3,8 @@ package ir.ac.iust.client;
 import java.net.DatagramSocket;
 
 /**
+ * Stream Request Model Class
+ *
  * Created by meraj on 12/22/15.
  */
 public class StreamRequest {

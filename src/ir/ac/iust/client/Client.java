@@ -17,7 +17,7 @@ import java.util.Scanner;
 import java.util.concurrent.Semaphore;
 
 /**
- * Created by meraj on 12/19/15.
+ * Created by meraj on 12/20/15.
  */
 public class Client {
 
@@ -39,12 +39,24 @@ public class Client {
         currentRequest = request;
     }
 
+    /**
+     * connects to server and runs ServerCommunicator instance in other thread
+     * @param ip server ip
+     * @param port server welcome port
+     * @throws IOException
+     */
     private void connectToServer(String ip, int port) throws IOException {
         socket = new Socket(ip, port);
         Thread thread = new Thread(new ServerCommunicator(this, socket));
         thread.start();
     }
 
+    /**
+     * creates a UDP socket, and waits for incoming stream in other thread,
+     * if udpSenderSocket is available, streams the received packets to next client
+     * @param listenPort port number, chosen by user
+     * @throws SocketException
+     */
     public void createAndListenSocket(final int listenPort) throws SocketException {
         currentRequest.udpReceiverSocket = new DatagramSocket(listenPort);
         Thread thread = new Thread(new Runnable() {
@@ -76,6 +88,9 @@ public class Client {
         thread.start();
     }
 
+    /**
+     * used by first client in chain to start stream
+     */
     public void stream() {
         try {
             InetAddress address = InetAddress.getByName(nextHost);
@@ -104,6 +119,10 @@ public class Client {
         }
     }
 
+    /**
+     * used by clients to send received packets to the next client in chain.
+     * @param data
+     */
     public void stream(byte[] data) {
         try {
             InetAddress address = InetAddress.getByName(nextHost);
@@ -120,6 +139,10 @@ public class Client {
         }
     }
 
+    /**
+     * sends a register request message to server
+     * @param clientName
+     */
     private void registerInServer(String clientName) {
         MessageProtocol.RegisterClient.Builder builder = MessageProtocol.RegisterClient.newBuilder();
         builder.setType(MessageProtocol.MessageType.REGISTER);
@@ -128,6 +151,9 @@ public class Client {
         prepareAndSendMessage(registerClient, builder.getType());
     }
 
+    /**
+     * sends unregister request message to server
+     */
     private void unregisterInServer() {
         MessageProtocol.UnregisterClient.Builder builder = MessageProtocol.UnregisterClient.newBuilder();
         builder.setType(MessageProtocol.MessageType.UNREGISTER);
@@ -136,6 +162,10 @@ public class Client {
         prepareAndSendMessage(unregisterClient, builder.getType());
     }
 
+    /**
+     * sends stream request message to server
+     * @param streamName
+     */
     private void sendStreamRequest(String streamName) {
         MessageProtocol.StreamRequest.Builder builder = MessageProtocol.StreamRequest.newBuilder();
         builder.setType(MessageProtocol.MessageType.STREAM_REQUEST);
@@ -145,6 +175,10 @@ public class Client {
         currentRequest = new StreamRequest(streamName);
     }
 
+    /**
+     * sends response to stream request message
+     * @param isIntrested true if client wants to be in chain, otherwise, false.
+     */
     public void sendStreamRequestResponse(boolean isIntrested) {
         MessageProtocol.Response.Builder builder = MessageProtocol.Response.newBuilder();
         builder.setType(MessageProtocol.MessageType.STREAM_REQUEST_RSP);
@@ -177,6 +211,11 @@ public class Client {
         prepareAndSendMessage(response, builder.getType());
     }
 
+    /**
+     * converts the Protobuf Message to byte[] and adds header to it.
+     * @param msg
+     * @param type
+     */
     private void prepareAndSendMessage(Message msg, MessageProtocol.MessageType type) {
         byte[] pkt = new byte[msg.getSerializedSize() + 3];
         pkt[0] = (byte) ((msg.getSerializedSize() + 1) & 0xFF);
@@ -189,6 +228,9 @@ public class Client {
         sendMessage(pkt);
     }
 
+    /**
+     * sends response to stream message from server
+     */
     private void sendStreamResponse() {
         MessageProtocol.Response.Builder builder = MessageProtocol.Response.newBuilder();
         builder.setType(MessageProtocol.MessageType.STREAM_RSP);
@@ -197,6 +239,10 @@ public class Client {
         prepareAndSendMessage(streamRequest, builder.getType());
     }
 
+    /**
+     * sends a packet to server in other thread
+     * @param pkt
+     */
     public void sendMessage(final byte[] pkt) {
         new Thread(new Runnable() {
             public void run() {
@@ -213,10 +259,19 @@ public class Client {
         }).start();
     }
 
+    /**
+     * closes server connection socket
+     * @throws IOException
+     */
     public void closeConnection() throws IOException {
         socket.close();
     }
 
+    /**
+     * opens an udpSenderSocket to send received stream to the next client
+     * @param pkt
+     * @throws InvalidProtocolBufferException
+     */
     public void handleStreamResponse(PKT pkt) throws InvalidProtocolBufferException {
         MessageProtocol.Response response = MessageProtocol.Response.parseFrom(pkt.data);
         if (response.getStatus() == MessageProtocol.Status.SUCCESS) {
@@ -242,6 +297,11 @@ public class Client {
         }
     }
 
+    /**
+     * client command line program
+     * @param args
+     * @throws InterruptedException
+     */
     public static void main(String[] args) throws InterruptedException {
         Client client = new Client();
         try {

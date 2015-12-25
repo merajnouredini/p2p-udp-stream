@@ -2,6 +2,8 @@ package ir.ac.iust.server;
 
 
 /**
+ * Chain Clients Model Class
+ *
  * Created by meraj on 12/19/15.
  */
 public class ClientUDP {

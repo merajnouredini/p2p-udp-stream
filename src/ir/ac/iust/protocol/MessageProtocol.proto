@@ -1,3 +1,6 @@
+// Protocol Messages defenition,
+// this file is used by protobuf compiler
+
 syntax = "proto2";
 
 enum MessageType {

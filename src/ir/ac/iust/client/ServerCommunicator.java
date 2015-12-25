@@ -17,7 +17,6 @@ import java.util.Scanner;
 public class ServerCommunicator implements Runnable {
     private Client client;
     private Socket socket = null;
-    private FileEvent fileEvent = null;
     private InputStream inputStream;
     private OutputStream outputStream;
 
@@ -28,6 +27,9 @@ public class ServerCommunicator implements Runnable {
         outputStream = socket.getOutputStream();
     }
 
+    /**
+     * waits for incoming packet from server, decodes packet frame from header
+     */
     @Override
     public void run() {
         byte[] buffer = new byte[4096];
@@ -48,7 +50,7 @@ public class ServerCommunicator implements Runnable {
                     processIncomingMessage(pkt);
                 }
             }
-            System.out.println(socket.getLocalPort() + " closed");
+            System.out.println(socket.getPort() + " closed");
         } catch (IOException e) {
             e.printStackTrace();
             System.out.println("socket closed");
@@ -57,6 +59,12 @@ public class ServerCommunicator implements Runnable {
         }
     }
 
+    /**
+     * processes incoming packet by calling proper methods from Client instance base on packet type
+     * @param pkt
+     * @throws InterruptedException
+     * @throws InvalidProtocolBufferException
+     */
     private void processIncomingMessage(PKT pkt) throws InterruptedException, InvalidProtocolBufferException {
         MessageProtocol.Response response;
         switch (pkt.type){

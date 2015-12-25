@@ -21,7 +21,12 @@ public class Server {
     public static ClientHandler streamRequester;
     private static int numOfStreamRequestAnswers = 0;
 
-
+    /**
+     * opens a ServerSocket and waits for clients to connect,
+     * runs a ClientHandler instance in other thread for connected clients
+     * @param port
+     * @throws IOException
+     */
     public static void listen(int port) throws IOException {
         serverSocket = new ServerSocket(port);
         System.out.println("Waiting for clients on port " + port + " ...");
@@ -34,10 +39,12 @@ public class Server {
         }
     }
 
-    public static synchronized void addHandler(ClientHandler handler){
-        handlers.add(handler);
-    }
-
+    /**
+     * register a client in server
+     * @param name client name
+     * @param socket client connection socket
+     * @throws KeyAlreadyExistsException
+     */
     public static synchronized void registerClient(String name, Socket socket) throws KeyAlreadyExistsException {
         if(!clients.containsKey(name)) {
             clients.put(name, socket);
@@ -46,6 +53,11 @@ public class Server {
         }
     }
 
+    /**
+     * unregister client from server
+     * @param clientName
+     * @throws NoSuchElementException
+     */
     public static synchronized void unregisterClient(String clientName) throws NoSuchElementException {
         if(clients.containsKey(clientName)) {
             clients.remove(clientName);
@@ -57,6 +69,18 @@ public class Server {
         } else {
             throw new NoSuchElementException();
         }
+    }
+
+    /**
+     * checks if every clients respond to Stream Request or not
+     * @return ture if ready
+     */
+    public static boolean isChainReady(){
+        return numOfStreamRequestAnswers == handlers.size()-1;
+    }
+
+    public static synchronized void addHandler(ClientHandler handler){
+        handlers.add(handler);
     }
 
     public static synchronized void addToChain(ClientUDP clientUDP){
@@ -71,10 +95,6 @@ public class Server {
         numOfStreamRequestAnswers = 0;
     }
 
-    public static boolean isChainReady(){
-        return numOfStreamRequestAnswers == handlers.size()-1;
-    }
-
     public static List<ClientHandler> getClientHandlers() {
         return handlers;
     }
@@ -87,6 +107,10 @@ public class Server {
         streamChains.clear();
     }
 
+    /**
+     * runs a server on port 4444
+     * @param args
+     */
     public static void main(String[] args) {
         try {
             Server.listen(4444);
@@ -95,29 +119,3 @@ public class Server {
         }
     }
 }
-
-/*
-class UDPServer
-{
-   public static void main(String args[]) throws Exception
-      {
-         DatagramSocket serverSocket = new DatagramSocket(9876);
-            byte[] receiveData = new byte[1024];
-            byte[] sendData = new byte[1024];
-            while(true)
-               {
-                  DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
-                  serverSocket.receive(receivePacket);
-                  String sentence = new String( receivePacket.getData());
-                  System.out.println("RECEIVED: " + sentence);
-                  InetAddress IPAddress = receivePacket.getAddress();
-                  int port = receivePacket.getPort();
-                  String capitalizedSentence = sentence.toUpperCase();
-                  sendData = capitalizedSentence.getBytes();
-                  DatagramPacket sendPacket =
-                  new DatagramPacket(sendData, sendData.length, IPAddress, port);
-                  serverSocket.send(sendPacket);
-               }
-      }
-} - See more at: https://systembash.com/a-simple-java-udp-server-and-udp-client/#sthash.5ZGOWq1r.dpuf
- */
